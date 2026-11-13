@@ -56,11 +56,15 @@ proxyRouter.get("/image", asyncWrapper(async (req: Request, res: Response) => {
     return res.status(413).json({ error: "Image exceeds the 15 MB limit." });
   }
 
-  if (!response.ok) {
-    return res.status(502).json({ error: `Upstream returned ${response.statusCode}` });
+  const finalUrl = new URL(response.url);
+  const finalHostAllowed = ALLOWED_IMAGE_DOMAINS.some(
+    (domain) => finalUrl.hostname === domain || finalUrl.hostname.endsWith(`.${domain}`)
+  );
+  if (!finalHostAllowed || finalUrl.protocol !== "https:") {
+    return res.status(403).json({ error: "Image redirect target is not allowed." });
   }
 
-  const contentType = String(response.headers.get("content-type") ?? "" ?? "").split(";")[0].trim().toLowerCase();
+  const contentType = String(response.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
   if (!contentType.startsWith("image/")) {
     return res.status(502).json({ error: "Upstream did not return an image." });
   }
