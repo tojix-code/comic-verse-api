@@ -1,7 +1,7 @@
 {
   "name": "manga-novel-api",
   "version": "2.0.0",
-  "description": "Proxy API for Manga/Manhwa/Manhua and Light Novels. Bypasses CORS and Cloudflare using got-scraping.",
+  "description": "Provider metadata API for manga, manhwa, manhua and light-novel catalogues.",
   "main": "dist/src/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
