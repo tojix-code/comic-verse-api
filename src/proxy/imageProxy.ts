@@ -1,5 +1,4 @@
 import { Router, Request, Response } from "express";
-import { gotScraping } from "got-scraping";
 import { asyncWrapper } from "../utils/asyncWrapper";
 
 export const proxyRouter = Router();
@@ -43,24 +42,25 @@ proxyRouter.get("/image", asyncWrapper(async (req: Request, res: Response) => {
 
   const referer = REFERER_MAP[parsed.hostname] ?? `${parsed.protocol}//${parsed.hostname}/`;
 
-  const response = await gotScraping({
-    url: rawUrl,
-    responseType: "buffer" as const,
-    headerGeneratorOptions: {
-      browsers: [{ name: "chrome" as const, minVersion: 112 }],
-      operatingSystems: ["windows" as const],
-    },
+  const response = await fetch(rawUrl, {
     headers: { Referer: referer, Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8" },
-    retry: { limit: 2 },
-    timeout: { request: 15_000 },
-    maxResponseSize: 15 * 1024 * 1024,
+    redirect: "follow",
+    signal: AbortSignal.timeout(15_000),
   });
+  if (!response.ok) {
+    return res.status(response.status === 403 || response.status === 401 ? 403 : 502)
+      .json({ error: `Image host denied access or returned HTTP ${response.status}.` });
+  }
+  const body = Buffer.from(await response.arrayBuffer());
+  if (body.byteLength > 15 * 1024 * 1024) {
+    return res.status(413).json({ error: "Image exceeds the 15 MB limit." });
+  }
 
-  if (response.statusCode !== 200) {
+  if (!response.ok) {
     return res.status(502).json({ error: `Upstream returned ${response.statusCode}` });
   }
 
-  const contentType = String(response.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
+  const contentType = String(response.headers.get("content-type") ?? "" ?? "").split(";")[0].trim().toLowerCase();
   if (!contentType.startsWith("image/")) {
     return res.status(502).json({ error: "Upstream did not return an image." });
   }
@@ -68,5 +68,5 @@ proxyRouter.get("/image", asyncWrapper(async (req: Request, res: Response) => {
   res.setHeader("Content-Type", contentType);
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=604800, immutable");
-  res.end(response.body);
+  res.end(body);
 }));
